@@ -6,3 +6,4 @@ from app.domain.base import Entity
 @dataclass(slots=True)
 class User(Entity):
     name: str = ""
+    telegram_id: int | None = None
