@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from app.transport.api.v1.schemas.budget import BudgetStatus
 from app.usecase.expense_analytics import (
+    build_dashboard_html,
     build_dashboard_svg,
     build_month_period,
     build_monthly_analytics,
@@ -55,6 +57,37 @@ class ExpenseAnalyticsTestCase(unittest.TestCase):
         self.assertIn("<svg", svg)
         self.assertIn("&lt;food&gt;", svg)
         self.assertNotIn("<food>", svg)
+
+    def test_empty_month(self) -> None:
+        start, _ = build_month_period(2026, 5)
+
+        analytics = build_monthly_analytics([], start)
+
+        self.assertEqual(analytics.total, Decimal("0.00"))
+        self.assertEqual(analytics.count, 0)
+        self.assertEqual(analytics.categories, ())
+        self.assertEqual(len(analytics.daily), 31)
+
+    def test_dashboard_html_marks_exceeded_budget(self) -> None:
+        start, _ = build_month_period(2026, 5)
+        analytics = build_monthly_analytics(
+            [FakeExpense(Decimal("150.00"), "food", datetime(2026, 5, 1, tzinfo=timezone.utc))],
+            start,
+        )
+        budget = BudgetStatus(
+            year=2026,
+            month=5,
+            budget=Decimal("100.00"),
+            spent=Decimal("150.00"),
+            remaining=Decimal("-50.00"),
+            percent_used=Decimal("150.00"),
+            exceeded=True,
+        )
+
+        html = build_dashboard_html(analytics, build_dashboard_svg(analytics, budget), budget)
+
+        self.assertIn("Бюджет превышен", html)
+        self.assertIn("150.00%", html)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,12 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.transport.telegram.parser import ExpenseParseError, parse_expense_message, parse_month_args
+from app.transport.telegram.parser import (
+    ExpenseParseError,
+    parse_budget_args,
+    parse_expense_message,
+    parse_month_args,
+)
 
 
 class TelegramParserTestCase(unittest.TestCase):
@@ -30,6 +35,10 @@ class TelegramParserTestCase(unittest.TestCase):
         with self.assertRaises(ExpenseParseError):
             parse_expense_message("/add free cafe")
 
+    def test_reject_negative_expense(self) -> None:
+        with self.assertRaises(ExpenseParseError):
+            parse_expense_message("/add -10 cafe")
+
     def test_parse_month_variants(self) -> None:
         now = datetime(2026, 5, 31, tzinfo=timezone.utc)
 
@@ -42,6 +51,17 @@ class TelegramParserTestCase(unittest.TestCase):
     def test_reject_bad_month(self) -> None:
         with self.assertRaises(ValueError):
             parse_month_args("/month 13")
+
+    def test_parse_budget(self) -> None:
+        total = parse_budget_args("/budget 05 2026 20000")
+        category = parse_budget_args("/budget 05 2026 cafe 5000")
+
+        self.assertEqual(total.month, 5)
+        self.assertEqual(total.year, 2026)
+        self.assertEqual(total.amount, Decimal("20000"))
+        self.assertIsNone(total.category)
+        self.assertEqual(category.category, "cafe")
+        self.assertEqual(category.amount, Decimal("5000"))
 
 
 if __name__ == "__main__":

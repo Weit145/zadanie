@@ -17,6 +17,14 @@ class ExpenseLike(Protocol):
     spent_at: datetime
 
 
+class BudgetStatusLike(Protocol):
+    budget: Decimal | None
+    spent: Decimal
+    remaining: Decimal | None
+    percent_used: Decimal | None
+    exceeded: bool
+
+
 @dataclass(slots=True, frozen=True)
 class CategoryTotal:
     category: str
@@ -128,6 +136,7 @@ def format_money(value: Decimal) -> str:
 
 def build_dashboard_svg(
     analytics: MonthlyAnalytics,
+    budget: BudgetStatusLike | None = None,
     width: int = 960,
     height: int = 540,
 ) -> str:
@@ -162,6 +171,18 @@ def build_dashboard_svg(
     if not bars:
         bars.append('<text x="64" y="148" class="muted">No expenses for this month</text>')
 
+    budget_label = "Budget is not set"
+    budget_class = "caption"
+    if budget and budget.budget is not None:
+        budget_label = (
+            f"Budget: {format_money(budget.budget)} | "
+            f"Remaining: {format_money(budget.remaining or Decimal('0'))} | "
+            f"Used: {budget.percent_used or Decimal('0.00')}%"
+        )
+        if budget.exceeded:
+            budget_label = f"Budget exceeded | {budget_label}"
+            budget_class = "danger"
+
     month_name = f"{analytics.month:02d}.{analytics.year}"
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-label="Expense dashboard">
 <style>
@@ -173,6 +194,7 @@ def build_dashboard_svg(
     .label {{ font: 14px Arial, sans-serif; fill: #2b2b2b; }}
     .value {{ font: 13px Arial, sans-serif; fill: #5f6368; }}
     .muted {{ font: 15px Arial, sans-serif; fill: #80868b; }}
+    .danger {{ font: 700 14px Arial, sans-serif; fill: #b42318; }}
     .bar {{ fill: #d84f3a; }}
     .line {{ fill: none; stroke: #0b6b5f; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }}
     .axis {{ stroke: #c7bfb4; stroke-width: 1; }}
@@ -186,6 +208,7 @@ def build_dashboard_svg(
 <text x="660" y="132" class="caption">Total</text>
 <text x="660" y="166" class="metric">{format_money(analytics.total)}</text>
 <text x="660" y="192" class="caption">{analytics.count} expense(s), avg {format_money(analytics.average_per_expense)}</text>
+<text x="660" y="220" class="{budget_class}">{html.escape(budget_label)}</text>
 <text x="48" y="274" class="caption">Daily dynamics</text>
 <line x1="{chart_x}" y1="{chart_y + chart_height}" x2="{chart_x + chart_width}" y2="{chart_y + chart_height}" class="axis" />
 <polyline points="{" ".join(daily_points)}" class="line" />
@@ -195,7 +218,24 @@ def build_dashboard_svg(
 </svg>"""
 
 
-def build_dashboard_html(analytics: MonthlyAnalytics, svg: str) -> str:
+def build_dashboard_html(
+    analytics: MonthlyAnalytics,
+    svg: str,
+    budget: BudgetStatusLike | None = None,
+) -> str:
+    budget_value = "Не задан"
+    remaining_value = "Не задан"
+    percent_value = "0.00%"
+    budget_warning = ""
+    budget_class = "metric"
+    if budget and budget.budget is not None:
+        budget_value = format_money(budget.budget)
+        remaining_value = format_money(budget.remaining or Decimal("0"))
+        percent_value = f"{budget.percent_used or Decimal('0.00')}%"
+        if budget.exceeded:
+            budget_warning = "<p class=\"warning\">Бюджет превышен</p>"
+            budget_class = "metric warning-box"
+
     return f"""<!doctype html>
 <html lang="ru">
 <head>
@@ -241,6 +281,15 @@ def build_dashboard_html(analytics: MonthlyAnalytics, svg: str) -> str:
             color: #0b6b5f;
             font-size: 24px;
         }}
+        .warning-box {{
+            border-color: #fda29b;
+            background: #fff5f5;
+        }}
+        .warning {{
+            margin: 0 0 14px;
+            color: #b42318;
+            font-weight: 700;
+        }}
         .chart {{
             overflow-x: auto;
             background: #fff;
@@ -258,11 +307,15 @@ def build_dashboard_html(analytics: MonthlyAnalytics, svg: str) -> str:
 <body>
     <main>
         <h1>Dashboard расходов за {analytics.month:02d}.{analytics.year}</h1>
+        {budget_warning}
         <section class="metrics">
             <div class="metric"><span>Всего</span><strong>{format_money(analytics.total)}</strong></div>
             <div class="metric"><span>Операций</span><strong>{analytics.count}</strong></div>
             <div class="metric"><span>Средний расход</span><strong>{format_money(analytics.average_per_expense)}</strong></div>
             <div class="metric"><span>Среднее в день</span><strong>{format_money(analytics.average_per_day)}</strong></div>
+            <div class="{budget_class}"><span>Бюджет</span><strong>{budget_value}</strong></div>
+            <div class="{budget_class}"><span>Остаток</span><strong>{remaining_value}</strong></div>
+            <div class="{budget_class}"><span>Использовано</span><strong>{percent_value}</strong></div>
         </section>
         <section class="chart">{svg}</section>
     </main>

@@ -25,8 +25,29 @@ class User(Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     expenses: Mapped[list["Expense"]] = relationship(
         "Expense",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    categories: Mapped[list["Category"]] = relationship(
+        "Category",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    payment_methods: Mapped[list["PaymentMethod"]] = relationship(
+        "PaymentMethod",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    monthly_budgets: Mapped[list["MonthlyBudget"]] = relationship(
+        "MonthlyBudget",
         back_populates="user",
         cascade="all, delete-orphan",
     )

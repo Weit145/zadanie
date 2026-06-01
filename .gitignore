@@ -14,6 +14,7 @@ profile.cov
 
 # Dependency directories (remove the comment below to include it)
 vendor/
+.venv/
 
 # env file
 .env
@@ -28,6 +29,7 @@ __pycache__/
 *.pyo
 *.pyd
 *.so
+.pytest_cache/
 .ruff_cache
 
 .DS_Store
